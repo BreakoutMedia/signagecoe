@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital Signage Player</title>
+<style>
+html,body {margin:0;padding:0;width:100%;height:100%;background:#000;}
+#container {width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#000;color:#fff;font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;font-size:40px;}
+video, img, iframe {max-width:100%;max-height:100%;width:100%;height:100%;object-fit:cover;border:none;background:#000;}
+</style>
+</head>
+<body>
+<div id="container">Lade…</div>
+<script>
+const params = new URLSearchParams(location.search);
+const screen = (params.get('screen') || 'ahaus').toLowerCase();
+const manifestUrl = `manifests/${screen}.json`;
+let playlist = [];
+let idx = 0;
+
+async function loadManifest(){
+  try{
+    const res = await fetch(manifestUrl+'?t='+Date.now(), {cache:'no-store'});
+    const data = await res.json();
+    playlist = Array.isArray(data.media) ? data.media : [];
+  }catch(e){
+    document.getElementById('container').textContent = 'Manifest nicht gefunden: ' + manifestUrl;
+  }
+}
+
+function showItem(item){
+  const cont = document.getElementById('container');
+  cont.innerHTML = '';
+  let el;
+  if(item.type === 'video'){
+    el = document.createElement('video');
+    el.src = item.src;
+    el.autoplay = true; el.muted = true; el.playsInline = true; el.preload = 'auto';
+  }else if(item.type === 'image'){
+    el = document.createElement('img');
+    el.src = item.src;
+  }else if(item.type === 'html'){
+    el = document.createElement('iframe');
+    el.src = item.src;
+  }else{
+    el = document.createElement('div');
+    el.textContent = 'Unbekannter Typ';
+  }
+  cont.appendChild(el);
+}
+
+async function loop(){
+  if(!playlist.length){ document.getElementById('container').textContent='Keine Inhalte'; return; }
+  const item = playlist[idx % playlist.length];
+  showItem(item);
+  const dur = Math.max(1, item.duration || 10) * 1000;
+  setTimeout(()=>{
+    idx = (idx + 1) % playlist.length;
+    if(idx === 0){ loadManifest().finally(loop); } else { loop(); }
+  }, dur);
+}
+
+(async()=>{
+  await loadManifest();
+  loop();
+  // Fallback-Reload alle 5 Min
+  setInterval(loadManifest, 5*60*1000);
+})();
+</script>
+</body>
+</html>
